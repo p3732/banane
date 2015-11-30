@@ -35,6 +35,18 @@ public class TypeChecker {
                 throw new TypeException("Function "+ id +" not defined");
         }
 
+        public Type lookupVar(String id) {
+            // search from current to earlier contexts
+            ListIterator<HashMap<String, Type>> listIterator = contexts.listIterator(contexts.size());
+
+            while(listIterator.hasPrevious()) {
+                HashMap<String, Type> context = listIterator.previous();
+                if (context.containsKey(id))
+                    return context.get(id);
+            }
+            throw new TypeException("Var "+ id +" not declared in any context.");
+        }
+
         public Env updateVar(String id, Type typ) {
             if (contexts.getLast().containsKey(id)) {
                 throw new TypeException("Var "+ id +" already declared");
@@ -149,12 +161,9 @@ public class TypeChecker {
         public Type visit(EInt e, Env env) { return Type_int; }
         public Type visit(EDouble e, Env env) { return Type_double; }
 
-        public Type visit(EId e, Env env) {
-            return Type_void; //TODO lookup id type
-        }
-        public Type visit(EApp e, Env env) {
-            return Type_void; //TODO lookup function type
-        }
+        // var, function
+        public Type visit(EId e, Env env) { return env.lookupVar(e.id_); }
+        public Type visit(EApp e, Env env) { return env.lookupFun(e.id_).outtyp; }
 
         //++ -- (implicit variable via parser)
         public Type visit(EPostIncr e, Env env) { return visit(e.exp_, env); }
