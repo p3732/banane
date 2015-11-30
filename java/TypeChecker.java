@@ -143,20 +143,68 @@ public class TypeChecker {
     }
 
     private class ExpInferer implements Exp.Visitor<Type, Env> {
-        public Type visit(EPlus e, Env env) {
-            if(typecheckExp(env, new Type_int(), e.exp_1) &&
-                typecheckExp(env, new Type_int(), e.exp_2)) {
+        // basic
+        public Type visit(ETrue e, Env env) { return Type_bool; }
+        public Type visit(EFalse e, Env env) { return Type_bool; }
+        public Type visit(EInt e, Env env) { return Type_int; }
+        public Type visit(EDouble e, Env env) { return Type_double; }
 
-            } else if(typecheckExp(env, new Type_double(), e.exp_1) &&
-                typecheckExp(env, new Type_double(), e.exp_2)) {
-            } else {
-
-            }
-            return new Type_int();
+        public Type visit(EId e, Env env) {
+            return Type_void; //TODO lookup id type
+        }
+        public Type visit(EApp e, Env env) {
+            return Type_void; //TODO lookup function type
         }
 
-        boolean typecheckExp(Env env, Type type1, Type type2) {
-            return type1.equals(type2);
+        //++ -- (implicit variable via parser)
+        public Type visit(EPostIncr e, Env env) { return visit(e.exp_, env); }
+        public Type visit(EPostDecr e, Env env) { return visit(e.exp_, env); }
+        public Type visit(EPreIncr e, Env env) { return visit(e.exp_, env); }
+        public Type visit(EPreDecr e, Env env) { return visit(e.exp_, env); }
+
+        // * / + - assignment(implicit variable via parser)
+        public Type visit(ETimes e, Env env) { return intDoubleType(e.exp_1, e.exp_2, env, "*"); }
+        public Type visit(EDiv e, Env env) { return intDoubleType(e.exp_1, e.exp_2, env, "/"); }
+        public Type visit(EPlus e, Env env) { return intDoubleType(e.exp_1, e.exp_2, env, "+"); }
+        public Type visit(EMinus e, Env env) { return intDoubleType(e.exp_1, e.exp_2, env, "-"); }
+        public Type visit(EAss e, Env env) { return sameType(e.exp_1, e.exp_2, env, "assignment"); }
+
+        // < > >= ... && ||
+        public Type visit(ELt e, Env env) { return boolType(e.exp_1, e.exp_2, env, "<");
+        public Type visit(EGt e, Env env) { return boolType(e.exp_1, e.exp_2, env, ">");
+        public Type visit(ELtEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "<=");
+        public Type visit(EGtEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, ">=");
+        public Type visit(EEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "==");
+        public Type visit(ENEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "!=");
+        public Type visit(EAnd e, Env env) { return boolType(e.exp_1, e.exp_2, env, "&&");
+        public Type visit(EOr e, Env env) { return boolType(e.exp_1, e.exp_2, env, "||");
+
+        private Type sameType(Exp e1, Exp e2, Env env, String symbol) {
+            Type type1 = visit(e1, env);
+            Type type2 = visit(e2, env);
+            if(!type1.equals(type2)) {
+                throw new TypeException("Arguments for "+ symbol +
+                " don't match (" + type1 + ", " + type2 + ")");
+            }
+            return type1;
+        }
+
+        private Type intDoubleType(Exp e1, Exp e2, Env env, String symbol) {
+            Type type = sameType(e1, e2, env, symbol);
+            if(!type.equals(new Type_int()) && !type.equals(new Type_double())) {
+                throw new TypeException(symbol + " not applicable for " + type);
+            }
+            return type;
+        }
+
+        private Type boolType(Exp e1, Exp e2, Env env, String symbol) {
+            Type type = sameType(e1, e2, env, symbol);
+            if(!type.equals(new Type_bool()) && type.equals(new Type_int())
+                && !type.equals(new Type_double())) {
+                throw new TypeException("Comparison " + symbol +
+                " not possible, given arguments (" + type1 + ", " + type2 + ")");
+            }
+            return new Type_bool();
         }
     }
 }
