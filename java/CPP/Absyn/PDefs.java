@@ -19,5 +19,4 @@ public class PDefs extends Program {
     return this.listdef_.hashCode();
   }
 
- adf
 }
