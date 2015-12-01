@@ -1,5 +1,6 @@
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.ListIterator;
 
 import CPP.PrettyPrinter;
 import CPP.Absyn.*;
@@ -120,56 +121,68 @@ public class TypeChecker {
         stm.accept(new StmChecker(), env);
     }
 
-    private class StmChecker implements Stm.Visitor<void, Env> {
-        public void visit(SExp p, Env env) {
-            typeinfer(env, p.exp_);
+    private class StmChecker implements Stm.Visitor<Void, Env> {
+        public Void visit(SExp p, Env env) {
+            p.exp_.accept(new ExpInferer(), env);
+            return null;
         }
 
-        public void visit(SDecls p, Env env) {
-
+        public Void visit(SDecls p, Env env) {
+            for(String id:listd_) {
+                env.updateVar(id, p.type_);
+            }
+            return null;
         }
 
-        public void visit(SInit p, Env env) {
-
+        public Void visit(SInit p, Env env) {
+            env.updateVar(p.id_, p.type_);
+            return null;
         }
 
-        public void visit(SReturn p, Env env) {
-
+        public Void visit(SReturn p, Env env) {
+            Type retType = lookupVar("return");
+            //void
+            if(retType.equals(new Type_void)) {
+                throw new TypeException("Did not expect return statement in void method.");
+            } else {
+                Type expType = p.exp_.accept(new ExpInferer(),env))
+                if (!retType.equals(expType)) {
+                    throw new TypeException("Returned type doesn't match declared one.");
+                }
+            }
+            return null;
         }
 
-        public void visit(SWhile p, Env env) {
+        public Void visit(SWhile p, Env env) {
 
+            return null;
         }
 
-        public void visit(SBlock p, Env env) {
-
+        public Void visit(SBlock p, Env env) {
+            return null;
         }
 
-        public void visit(SIfElse p, Env env) {
-
+        public Void visit(SIfElse p, Env env) {
+            return null;
         }
-    }
-
-    public void typeinfer(Env env, Exp exp) {
-        return stm.accept(new ExpInferer(), env); //TODO return?
     }
 
     private class ExpInferer implements Exp.Visitor<Type, Env> {
         // basic
-        public Type visit(ETrue e, Env env) { return Type_bool; }
-        public Type visit(EFalse e, Env env) { return Type_bool; }
-        public Type visit(EInt e, Env env) { return Type_int; }
-        public Type visit(EDouble e, Env env) { return Type_double; }
+        public Type visit(ETrue e, Env env) { return new Type_bool(); }
+        public Type visit(EFalse e, Env env) { return new Type_bool(); }
+        public Type visit(EInt e, Env env) { return new Type_int(); }
+        public Type visit(EDouble e, Env env) { return new Type_double(); }
 
         // var, function
         public Type visit(EId e, Env env) { return env.lookupVar(e.id_); }
         public Type visit(EApp e, Env env) { return env.lookupFun(e.id_).outtyp; }
 
         //++ -- (implicit variable via parser)
-        public Type visit(EPostIncr e, Env env) { return visit(e.exp_, env); }
-        public Type visit(EPostDecr e, Env env) { return visit(e.exp_, env); }
-        public Type visit(EPreIncr e, Env env) { return visit(e.exp_, env); }
-        public Type visit(EPreDecr e, Env env) { return visit(e.exp_, env); }
+        public Type visit(EPostIncr e, Env env) { return e.exp_.accept(this, env); }
+        public Type visit(EPostDecr e, Env env) { return e.exp_.accept(this, env); }
+        public Type visit(EPreIncr e, Env env) { return e.exp_.accept(this, env); }
+        public Type visit(EPreDecr e, Env env) { return e.exp_.accept(this, env); }
 
         // * / + - assignment(implicit variable via parser)
         public Type visit(ETimes e, Env env) { return intDoubleType(e.exp_1, e.exp_2, env, "*"); }
@@ -179,18 +192,18 @@ public class TypeChecker {
         public Type visit(EAss e, Env env) { return sameType(e.exp_1, e.exp_2, env, "assignment"); }
 
         // < > >= ... && ||
-        public Type visit(ELt e, Env env) { return boolType(e.exp_1, e.exp_2, env, "<");
-        public Type visit(EGt e, Env env) { return boolType(e.exp_1, e.exp_2, env, ">");
-        public Type visit(ELtEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "<=");
-        public Type visit(EGtEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, ">=");
-        public Type visit(EEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "==");
-        public Type visit(ENEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "!=");
-        public Type visit(EAnd e, Env env) { return boolType(e.exp_1, e.exp_2, env, "&&");
-        public Type visit(EOr e, Env env) { return boolType(e.exp_1, e.exp_2, env, "||");
+        public Type visit(ELt e, Env env) { return boolType(e.exp_1, e.exp_2, env, "<"); }
+        public Type visit(EGt e, Env env) { return boolType(e.exp_1, e.exp_2, env, ">"); }
+        public Type visit(ELtEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "<="); }
+        public Type visit(EGtEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, ">="); }
+        public Type visit(EEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "=="); }
+        public Type visit(ENEq e, Env env) { return boolType(e.exp_1, e.exp_2, env, "!="); }
+        public Type visit(EAnd e, Env env) { return boolType(e.exp_1, e.exp_2, env, "&&"); }
+        public Type visit(EOr e, Env env) { return boolType(e.exp_1, e.exp_2, env, "||"); }
 
         private Type sameType(Exp e1, Exp e2, Env env, String symbol) {
-            Type type1 = visit(e1, env);
-            Type type2 = visit(e2, env);
+            Type type1 = e1.accept(this, env);
+            Type type2 = e2.accept(this, env);
             if(!type1.equals(type2)) {
                 throw new TypeException("Arguments for "+ symbol +
                 " don't match (" + type1 + ", " + type2 + ")");
@@ -211,7 +224,7 @@ public class TypeChecker {
             if(!type.equals(new Type_bool()) && type.equals(new Type_int())
                 && !type.equals(new Type_double())) {
                 throw new TypeException("Comparison " + symbol +
-                " not possible, given arguments (" + type1 + ", " + type2 + ")");
+                " not possible, given arguments are not comparable.");
             }
             return new Type_bool();
         }
