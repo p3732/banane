@@ -37,7 +37,8 @@ public class TypeChecker {
                 ADecl decl = (ADecl)arg;
                 env.updateVar(decl.id_,decl.type_);
             }
-
+        }
+        for(Def f: defs.listdef_) {
             typecheckStms(env, df.liststm_);
 
             env.exitBlock();
@@ -100,10 +101,24 @@ public class TypeChecker {
         }
 
         public Void visit(SBlock p, Env env) {
+            env.newBlock();
+            p.stm_.accept(this, env);
+            env.exitBlock();
             return null;
         }
 
         public Void visit(SIfElse p, Env env) {
+            Type expType = p.exp_.accept(new ExpInferer(),env);
+            if(!expType.equals(new Type_bool())) {
+                throw new TypeException("Expression in while loop is not of type bool.");
+            } else {
+                env.newBlock();
+                p.stm_1.accept(this, env);
+                env.exitBlock();
+                env.newBlock();
+                p.stm_2.accept(this, env);
+                env.exitBlock();
+            }
             return null;
         }
     }
