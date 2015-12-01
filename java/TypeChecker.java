@@ -38,7 +38,9 @@ public class TypeChecker {
                 env.updateVar(decl.id_,decl.type_);
             }
         }
+
         for(Def f: defs.listdef_) {
+            DFun df = (DFun)f;
             typecheckStms(env, df.liststm_);
 
             env.exitBlock();
@@ -102,7 +104,9 @@ public class TypeChecker {
 
         public Void visit(SBlock p, Env env) {
             env.newBlock();
-            p.stm_.accept(this, env);
+            for(Stm stm:p.liststm_) {
+                stm.accept(this, env);
+            }
             env.exitBlock();
             return null;
         }
