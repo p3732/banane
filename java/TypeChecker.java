@@ -11,72 +11,6 @@ public class TypeChecker {
         INT, DOUBLE, BOOL, VOID
     }
 
-    private static class FunType {
-        public LinkedList<Type> intyps;
-        public Type outtyp;
-
-        public FunType(LinkedList<Type> intyps, Type outtyp) {
-            this.intyps = intyps;
-            this.outtyp = outtyp;
-        };
-    }
-
-    private static class Env {
-        public HashMap<String, FunType> signature = new HashMap<String, FunType>();
-        public LinkedList<HashMap<String,Type>> contexts = new LinkedList<HashMap<String,Type>>();
-
-        public static Env empty() {
-            return new Env();
-        }
-
-        public FunType lookupFun(String id) {
-            if (signature.containsKey(id))
-                return signature.get(id);
-            else
-                throw new TypeException("Function "+ id +" not defined");
-        }
-
-        public Type lookupVar(String id) {
-            // search from current to earlier contexts
-            ListIterator<HashMap<String, Type>> listIterator = contexts.listIterator(contexts.size());
-
-            while(listIterator.hasPrevious()) {
-                HashMap<String, Type> context = listIterator.previous();
-                if (context.containsKey(id))
-                    return context.get(id);
-            }
-            throw new TypeException("Var "+ id +" not declared in any context.");
-        }
-
-        public Env updateVar(String id, Type typ) {
-            if (contexts.getLast().containsKey(id)) {
-                throw new TypeException("Var "+ id +" already declared");
-            } else {
-                contexts.getLast().put(id, typ);
-                return this;
-            }
-        }
-
-        public Env updateFun(String id, FunType funtyp) {
-            if (signature.containsKey(id)) {
-                throw new TypeException("Function "+ id +" already declared");
-            } else {
-                signature.put(id, funtyp);
-                return this;
-            }
-        }
-
-        public Env newBlock() {
-            contexts.add(new HashMap<String,Type>());
-            return this;
-        }
-
-        public Env exitBlock() {
-            contexts.pollLast();
-            return this;
-        }
-    }
-
     public void typecheck(Program p) {
         PDefs defs = (PDefs)p;
         Env env = Env.empty();
@@ -128,7 +62,7 @@ public class TypeChecker {
         }
 
         public Void visit(SDecls p, Env env) {
-            for(String id:listd_) {
+            for(String id:p.listid_) {
                 env.updateVar(id, p.type_);
             }
             return null;
@@ -140,12 +74,12 @@ public class TypeChecker {
         }
 
         public Void visit(SReturn p, Env env) {
-            Type retType = lookupVar("return");
+            Type retType = env.lookupVar("return");
             //void
-            if(retType.equals(new Type_void)) {
+            if(retType.equals(new Type_void())) {
                 throw new TypeException("Did not expect return statement in void method.");
             } else {
-                Type expType = p.exp_.accept(new ExpInferer(),env))
+                Type expType = p.exp_.accept(new ExpInferer(),env);
                 if (!retType.equals(expType)) {
                     throw new TypeException("Returned type doesn't match declared one.");
                 }
@@ -154,7 +88,14 @@ public class TypeChecker {
         }
 
         public Void visit(SWhile p, Env env) {
-
+            Type expType = p.exp_.accept(new ExpInferer(),env);
+            if(!expType.equals(new Type_bool())) {
+                throw new TypeException("Expression in while loop is not of type bool.");
+            } else {
+                env.newBlock();
+                p.stm_.accept(this, env);
+                env.exitBlock();
+            }
             return null;
         }
 
