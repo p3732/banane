@@ -6,7 +6,9 @@ import CPP.PrettyPrinter;
 import CPP.Absyn.*;
 
 public class Env {
+    // functions
     public HashMap<String, FunType> signature = new HashMap<String, FunType>();
+    // current variables
     public LinkedList<HashMap<String,Type>> contexts = new LinkedList<HashMap<String,Type>>();
 
     public static Env empty() {

@@ -28,27 +28,30 @@ public class TypeChecker {
 
         for(Def f: defs.listdef_) {
             DFun df = (DFun)f;
-
-            env.newBlock();
-
-            env.updateVar("return", df.type_);
+            LinkedList<Type> funArgs = new LinkedList<Type>();
 
             for(Arg arg: df.listarg_) {
                 ADecl decl = (ADecl)arg;
-                env.updateVar(decl.id_,decl.type_);
+                args.add(decl.type_);
             }
+            env.updateFun(df.id_, new FunType(funArgs,df.type_));
         }
 
         for(Def f: defs.listdef_) {
             DFun df = (DFun)f;
-            typecheckStms(env, df.liststm_);
 
+            env.newBlock();
+            env.updateVar("return", df.type_);
+            for(Arg arg: df.listarg_) {
+                ADecl decl = (ADecl)arg;
+                env.updateVar(decl.id_,decl.type_);
+            }
+            typecheckStms(env, df.liststm_);
             env.exitBlock();
         }
     }
 
     public void typecheckStms(Env env, ListStm stms) {
-        //TODO return stms
         for(Stm stm:stms) {
             typecheckStm(env, stm);
         }
@@ -181,7 +184,7 @@ public class TypeChecker {
 
         private Type boolType(Exp e1, Exp e2, Env env, String symbol) {
             Type type = sameType(e1, e2, env, symbol);
-            if(!type.equals(new Type_bool()) && type.equals(new Type_int())
+            if(!type.equals(new Type_bool()) && !type.equals(new Type_int())
                 && !type.equals(new Type_double())) {
                 throw new TypeException("Comparison " + symbol +
                 " not possible, given arguments are not comparable.");
