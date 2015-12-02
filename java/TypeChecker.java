@@ -80,7 +80,7 @@ public class TypeChecker {
         }
 
         public Void visit(SReturn p, Env env) {
-            Type retType = env.lookupVar("return");
+            Type retType = env.getTypeOfVar("return");
             //void
             if(retType.equals(new Type_void())) {
                 throw new TypeException("Did not expect return statement in void method.");
@@ -138,7 +138,7 @@ public class TypeChecker {
         public Type visit(EDouble e, Env env) { return new Type_double(); }
 
         // var, function
-        public Type visit(EId e, Env env) { return env.lookupVar(e.id_); }
+        public Type visit(EId e, Env env) { return env.getTypeOfVar(e.id_); }
         public Type visit(EApp e, Env env) { return env.lookupFun(e.id_).outtyp; }
 
         //++ -- (implicit variable via parser)
@@ -193,3 +193,4 @@ public class TypeChecker {
         }
     }
 }
+
