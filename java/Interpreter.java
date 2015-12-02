@@ -1,21 +1,67 @@
+import java.util.LinkedList;
+
 import CPP.Absyn.*;
 
 public class Interpreter {
 
     public void interpret(Program p) {
+	System.out.println("Interpreting started....");
+    	PDefs defs = (PDefs)p;
+        Env env = Env.empty();
+        LinkedList<Object> args = new LinkedList<Object>();
 
+//        // predefined functions
+//        env.updateFun("readInt", new FunType(args, new Type_int()));
+//        args.add(new Type_int());
+//        env.updateFun("printInt", new FunType(args, new Type_void()));
+//        args.clear();
+//        env.updateFun("readDouble", new FunType(args, new Type_double()));
+//        args.add(new Type_double());
+//        env.updateFun("printDouble", new FunType(args, new Type_void()));
+//        args.clear();
+
+        for(Def f: defs.listdef_) {
+            DFun df = (DFun)f;
+	    System.out.println(df.id_ + " seen");
+//            LinkedList<Object> funArgs = new LinkedList<Object>();
+//
+//            for(Arg arg: df.listarg_) {
+//                ADecl decl = (ADecl)arg;
+//                args.add(decl.type_);
+//            }
+            env.updateFunction(df.id_, df);
+        }
+	System.out.println("Start interpreting main()");
+        // interpret function main()
+        interpret(env.lookupFunction("main"), env);
+//
+//        for(Def f: defs.listdef_) {
+//            DFun df = (DFun)f;
+//
+//            env.newBlock();
+//            env.updateVar("return", df.type_);
+//            for(Arg arg: df.listarg_) {
+//                ADecl decl = (ADecl)arg;
+//                env.updateVar(decl.id_,decl.type_);
+//            }
+//            typecheckStms(env, df.liststm_);
+//            env.exitBlock();
+//        }
+    }
+    
+    private void interpret(DFun df, Env env) {
+    	FunctionInterpreter fi = new FunctionInterpreter();
+    	fi.visit(df, env);
     }
 
     private class FunctionInterpreter implements Def.Visitor<Void, Env> {
-        public Void visit(DFun d, Env env) {
-            DFun df=(DFun)d;
+        public Void visit(DFun df, Env env) {
             for(Stm stm:df.liststm_) {
                 stm.accept(new StmEval(), env);
                 if(stm instanceof SReturn) {
                     break;
                 }
             }
-
             return null;
         }
     }
