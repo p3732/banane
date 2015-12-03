@@ -8,55 +8,35 @@ public class Interpreter {
 	System.out.println("Interpreting started....");
     	PDefs defs = (PDefs)p;
         Env env = Env.empty();
-        LinkedList<Object> args = new LinkedList<Object>();
 
-//        // predefined functions
-//        env.updateFun("readInt", new FunType(args, new Type_int()));
-//        args.add(new Type_int());
-//        env.updateFun("printInt", new FunType(args, new Type_void()));
-//        args.clear();
-//        env.updateFun("readDouble", new FunType(args, new Type_double()));
-//        args.add(new Type_double());
-//        env.updateFun("printDouble", new FunType(args, new Type_void()));
-//        args.clear();
-
+        // Iterate over all function declarations
         for(Def f: defs.listdef_) {
             DFun df = (DFun)f;
-	    System.out.println(df.id_ + " seen");
-//            LinkedList<Object> funArgs = new LinkedList<Object>();
-//
-//            for(Arg arg: df.listarg_) {
-//                ADecl decl = (ADecl)arg;
-//                args.add(decl.type_);
-//            }
-            env.updateFunction(df.id_, df);
+//            System.out.println(df.id_ + " seen");
+            LinkedList<String> params = new LinkedList<String>();
+
+            for(Arg arg: df.listarg_) {
+                ADecl decl = (ADecl)arg;
+                params.add(decl.id_);
+            }
+	    	Function func = new Function(params, df.liststm_, df);
+            env.updateFunction(df.id_, func);
         }
-	System.out.println("Start interpreting main()");
+        System.out.println("Start interpreting main()");
         // interpret function main()
-        interpret(env.lookupFunction("main"), env);
-//
-//        for(Def f: defs.listdef_) {
-//            DFun df = (DFun)f;
-//
-//            env.newBlock();
-//            env.updateVar("return", df.type_);
-//            for(Arg arg: df.listarg_) {
-//                ADecl decl = (ADecl)arg;
-//                env.updateVar(decl.id_,decl.type_);
-//            }
-//            typecheckStms(env, df.liststm_);
-//            env.exitBlock();
-//        }
+        interpretMain(env);
     }
     
-    private void interpret(DFun df, Env env) {
+    private void interpretMain(Env env) {
     	FunctionInterpreter fi = new FunctionInterpreter();
-    	fi.visit(df, env);
+    	Env mainEnv = env.newFunction("main");
+    	Function f = mainEnv.lookupFunction("main");
+    	fi.visit(f.cFunDecl, mainEnv);
     }
 
     private class FunctionInterpreter implements Def.Visitor<Void, Env> {
         public Void visit(DFun df, Env env) {
-            for(Stm stm:df.liststm_) {
+            for(Stm stm : df.liststm_) {
                 stm.accept(new StmEval(), env);
                 if(stm instanceof SReturn) {
                     break;
@@ -73,20 +53,21 @@ public class Interpreter {
         }
 
         public Void visit(SDecls df, Env env) {
-        	
+        	for (String id : df.listid_) {
+        		env.declareVar(id, null);
+        	}
             return null;
         }
 
         public Void visit(SInit df, Env env) {
         	Object varValue = df.exp_.accept(new ExpEval(), env);
-        	env.updateVar(df.id_, varValue);
+        	env.declareVar(df.id_, varValue);
             return null;
         }
 
         public Void visit(SReturn df, Env env) {
         	Object returnValue = df.exp_.accept(new ExpEval(), env);
-        	// TODO: Put the returnValue somewhere
-        	env.exitBlock();
+        	env.declareVar("return", returnValue);
             return null;
         }
 
@@ -127,7 +108,10 @@ public class Interpreter {
 
         // var, function
         public Object visit(EId e, Env env) { return env.lookupVar(e.id_); }
-        public Object visit(EApp e, Env env) { return null; }
+        
+        public Object visit(EApp e, Env env) { 
+        	return evaluateFunction(e, env);
+        }
 
         //++ -- (implicit variable via parser)
         public Object visit(EPostIncr e, Env env) { return null; }
@@ -172,7 +156,15 @@ public class Interpreter {
         	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) - ((Integer)v2);
         	return ((Double)v1) - ((Double)v2);
         }
-        public Object visit(EAss e, Env env) { return null; }
+        public Object visit(EAss e, Env env) {
+        	if (!(e.exp_1 instanceof EId)) {
+        		throw new RuntimeException("Left-hand side of the assignment is not a variable.");
+        	}
+        	String id = ((EId) e.exp_1).id_;
+        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	env.updateVar(id, v2);
+        	return v2; 
+        }
 
         // < > >= ... && ||
         public Boolean visit(ELt e, Env env) { 
@@ -286,6 +278,53 @@ public class Interpreter {
         	}
         	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
         }
+        
+        private Object evaluateFunction(EApp exp, Env env) {
+        	LinkedList<Object> argEvaluation = new LinkedList<Object>();
+        	// Evaluate the arguments
+        	for (Exp e : exp.listexp_) {
+        		argEvaluation.addLast(e.accept(new ExpEval(), env));
+        	}
+        	
+        	switch (exp.id_) {
+        	case "printInt": {
+        		assert(argEvaluation.size() == 1) : "printInt got too many arguments.";
+        		Integer i = (Integer) argEvaluation.get(0);
+        		System.out.print(i);
+        		return null;
+        	}
+        	case "printDouble": {
+        		assert(argEvaluation.size() == 1) : "printDouble got too many arguments.";
+        		Double d = (Double) argEvaluation.get(0);
+        		System.out.print(d);
+        		return null;
+        	}
+        	
+        	case "readInt": {
+        		// System.in
+        		// TODO:
+        	}
+        	case "readDouble": {
+        		// System.in
+        		// TODO:
+        	}
+        	}
+        	Function func = env.lookupFunction(exp.id_);
+        	// Put new environment
+        	// Create mapping from parameter to its appropriate value (in the new environment)
+        	Env funcEnv = env.newFunction(func.cFunDecl.id_);
+        	assert(func.cParameters.size() == argEvaluation.size());
+        	for (int i = 0; i < func.cParameters.size(); i++) {
+        		funcEnv.declareVar(func.cParameters.get(i), argEvaluation.get(i));
+        	}
+        	// Execute the stmts of the function
+        	FunctionInterpreter fi = new FunctionInterpreter();
+        	fi.visit(func.cFunDecl, funcEnv);
+        	// Return the returned value of the function
+        	Object returnValue = funcEnv.lookupVar("return");
+        	return returnValue;
+        }
+        	
     }
 }
 

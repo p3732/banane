@@ -12,13 +12,23 @@ public class Env {
     public LinkedList<HashMap<String,Type>> contexts = new LinkedList<HashMap<String,Type>>();
     
     // current variables for Interpreter
-    public LinkedList<HashMap<String,Object>> varContexts = new LinkedList<HashMap<String,Object>>();
+    private LinkedList<HashMap<String,Object>> varContexts = new LinkedList<HashMap<String,Object>>();
     // functions
-    public HashMap<String, DFun> functions = new HashMap<String, DFun>();
+    private HashMap<String, Function> declFunctions = new HashMap<String, Function>();
+    
+   
+	private final String cFunctionOfThisEnv; 
+    
+    private Env() {cFunctionOfThisEnv = "NoFunctionGivenForThisContext"; }
+    
+    private Env (String methodOfThisEnv) {
+    	cFunctionOfThisEnv = methodOfThisEnv;
+    }
     
     public static Env empty() {
         return new Env();
     }
+    
 
     public FunType lookupFun(String id) {
         if (signature.containsKey(id))
@@ -28,12 +38,12 @@ public class Env {
     }
     
     // used for Interpreter
-    public DFun lookupFunction(String id) {
-	System.out.println("lookupFunction(" + id + ") called.");
-    	System.out.println("Printing available functions");
-    	System.out.println(functions.keySet());
-        if (functions.containsKey(id))
-            return functions.get(id);
+    public Function lookupFunction(String id) {
+//    	System.out.println("lookupFunction(" + id + ") called.");
+//    	System.out.println("Printing available functions");
+//    	System.out.println(declFunctions.keySet());
+        if (declFunctions.containsKey(id))
+            return declFunctions.get(id);
         else
             throw new RuntimeException("Function "+ id +" not defined");
     }
@@ -63,6 +73,14 @@ public class Env {
         }
         throw new RuntimeException("Var "+ id +" not declared in any context.");
     }
+    public Env declareVar(String id, Object varValue) {
+    	 if (varContexts.getLast().containsKey(id)) {
+             throw new RuntimeException("Var "+ id +" already declared");
+         } else {
+         	varContexts.getLast().put(id, varValue);
+             return this;
+         }
+    }
     
     public Env updateVar(String id, Type typ) {
         if (contexts.getLast().containsKey(id)) {
@@ -74,12 +92,18 @@ public class Env {
     }
  // used for Interpreter
     public Env updateVar(String id, Object varValue) {
-        if (varContexts.getLast().containsKey(id)) {
-            throw new RuntimeException("Var "+ id +" already declared");
-        } else {
-        	varContexts.getLast().put(id, varValue);
+    	// search from current to earlier contexts
+        ListIterator<HashMap<String, Object>> listIterator = varContexts.listIterator(varContexts.size());
+
+        while(listIterator.hasPrevious()) {
+            HashMap<String, Object> context = listIterator.previous();
+            if (context.containsKey(id)) {
+            	context.put(id, varValue);
+            }
             return this;
         }
+        throw new RuntimeException("Var "+ id +" not declared in any context.");
+        
     }
 
     public Env updateFun(String id, FunType funtyp) {
@@ -91,14 +115,20 @@ public class Env {
         }
     }
     
-    public Env updateFunction(String id, DFun df) {
-        if (functions.containsKey(id)) {
+    public Env updateFunction(String id, Function f) {
+        if (declFunctions.containsKey(id)) {
             throw new TypeException("Function "+ id +" already declared");
         } else {
-        	functions.put(id, df);
-		System.out.println(id + " declared.");
+        	declFunctions.put(id, f);
+//        	System.out.println(id + " declared.");
             return this;
         }
+    }
+    public Env newFunction(String funcName) {
+    	Env newEnv = new Env(funcName);
+    	newEnv.declFunctions = this.declFunctions;
+    	newEnv.newBlock();
+    	return newEnv;
     }
 
     public Env newBlock() {
