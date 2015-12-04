@@ -5,7 +5,7 @@ import CPP.Absyn.*;
 public class Interpreter {
 
     public void interpret(Program p) {
-	System.out.println("Interpreting started....");
+//	System.out.println("Interpreting started....");
     	PDefs defs = (PDefs)p;
         Env env = Env.empty();
 
@@ -22,7 +22,7 @@ public class Interpreter {
 	    	Function func = new Function(params, df.liststm_, df);
             env.updateFunction(df.id_, func);
         }
-        System.out.println("Start interpreting main()");
+//        System.out.println("Start interpreting main()");
         // interpret function main()
         interpretMain(env);
     }
@@ -79,12 +79,14 @@ public class Interpreter {
         }
 
         public Void visit(SBlock df, Env env) {
+        	env.newBlock();
         	for(Stm stm : df.liststm_) {
                 stm.accept(new StmEval(), env);
                 if(stm instanceof SReturn) {
                     break;
                 }
             }
+        	env.exitBlock();
             return null;
         }
 
@@ -114,47 +116,111 @@ public class Interpreter {
         }
 
         //++ -- (implicit variable via parser)
-        public Object visit(EPostIncr e, Env env) { return null; }
-        public Object visit(EPostDecr e, Env env) { return null; }
-        public Object visit(EPreIncr e, Env env) { return null; }
-        public Object visit(EPreDecr e, Env env) { return null; }
+        public Object visit(EPostIncr e, Env env) { 
+        	if (!(e.exp_ instanceof EId)) {
+        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
+        	}
+        	String var = ((EId) e.exp_).id_;
+        	Object oldValue = env.lookupVar(var);
+        	if (oldValue instanceof Integer) {
+        		env.updateVar(var, ((Integer) oldValue).intValue() + 1);
+        	} else if (oldValue instanceof Double) {
+        		env.updateVar(var, ((Double) oldValue).doubleValue() + 1.0);
+        	} else {
+        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
+        	}
+        	
+        	return oldValue; 
+        }
+        public Object visit(EPostDecr e, Env env) {
+        	if (!(e.exp_ instanceof EId)) {
+        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
+        	}
+        	String var = ((EId) e.exp_).id_;
+        	Object oldValue = env.lookupVar(var);
+        	if (oldValue instanceof Integer) {
+        		env.updateVar(var, ((Integer) oldValue).intValue() - 1);
+        	} else if (oldValue instanceof Double) {
+        		env.updateVar(var, ((Double) oldValue).doubleValue() - 1.0);
+        	} else {
+        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
+        	}
+        	
+        	return oldValue; 
+        }
+        public Object visit(EPreIncr e, Env env) { 
+        	if (!(e.exp_ instanceof EId)) {
+        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
+        	}
+        	String var = ((EId) e.exp_).id_;
+        	Object oldValue = env.lookupVar(var);
+        	if (oldValue instanceof Integer) {
+        		Integer newValue = ((Integer) oldValue).intValue() + 1;
+        		env.updateVar(var, newValue);
+        		return newValue;
+        	} else if (oldValue instanceof Double) {
+        		Double newValue = ((Double) oldValue).doubleValue() + 1.0;
+        		env.updateVar(var, newValue);
+        		return newValue;
+        	} else {
+        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
+        	}
+        }
+        public Object visit(EPreDecr e, Env env) { 
+        	if (!(e.exp_ instanceof EId)) {
+        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
+        	}
+        	String var = ((EId) e.exp_).id_;
+        	Object oldValue = env.lookupVar(var);
+        	if (oldValue instanceof Integer) {
+        		Integer newValue = ((Integer) oldValue).intValue() - 1;
+        		env.updateVar(var, newValue);
+        		return newValue;
+        	} else if (oldValue instanceof Double) {
+        		Double newValue = ((Double) oldValue).doubleValue() - 1.0;
+        		env.updateVar(var, newValue);
+        		return newValue;
+        	} else {
+        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
+        	}
+        }
 
         // * / + - assignment(implicit variable via parser)
         public Object visit(ETimes e, Env env) { 
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) * ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) * ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) * ((Integer)v2);
-        	return ((Double)v1) * ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) * ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) * ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) * ((int)v2);
+        	return ((double)v1) * ((double)v2);
         }
         public Object visit(EDiv e, Env env) { 
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) / ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) / ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) / ((Integer)v2);
-        	return ((Double)v1) / ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) / ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) / ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) / ((int)v2);
+        	return ((double)v1) / ((double)v2);
         }
         public Object visit(EPlus e, Env env) { 
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) + ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) + ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) + ((Integer)v2);
-        	return ((Double)v1) + ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) + ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) + ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) + ((int)v2);
+        	return ((double)v1) + ((double)v2);
         }
         public Object visit(EMinus e, Env env) {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) - ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) - ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) - ((Integer)v2);
-        	return ((Double)v1) - ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) - ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) - ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) - ((int)v2);
+        	return ((double)v1) - ((double)v2);
         }
         public Object visit(EAss e, Env env) {
         	if (!(e.exp_1 instanceof EId)) {
@@ -171,45 +237,45 @@ public class Interpreter {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) < ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) < ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) < ((Integer)v2);
-        	return ((Double)v1) < ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) < ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) < ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) < ((int)v2);
+        	return ((double)v1) < ((double)v2);
         }
         public Boolean visit(EGt e, Env env) {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) > ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) > ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) > ((Integer)v2);
-        	return ((Double)v1) > ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) > ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) > ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) > ((int)v2);
+        	return ((double)v1) > ((double)v2);
         }
         public Boolean visit(ELtEq e, Env env) {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) <= ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) <= ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) <= ((Integer)v2);
-        	return ((Double)v1) <= ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) <= ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) <= ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) <= ((int)v2);
+        	return ((double)v1) <= ((double)v2);
         }
         public Boolean visit(EGtEq e, Env env) {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) >= ((Integer)v2);
-        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((Integer)v1) >= ((Double)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((Double)v1) >= ((Integer)v2);
-        	return ((Double)v1) >= ((Double)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) >= ((int)v2);
+        	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) >= ((double)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) >= ((int)v2);
+        	return ((double)v1) >= ((double)v2);
         }
         public Boolean visit(EEq e, Env env) {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) == ((Integer)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Double)) return ((Double)v1) == ((Double)v2);
-        	else if ((v1 instanceof Boolean) && (v2 instanceof Boolean)) return ((Boolean)v1) == ((Boolean)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) { return ((int)v1) == ((int)v2); }
+        	else if ((v1 instanceof Double) && (v2 instanceof Double)) return ((double)v1) == ((double)v2);
+        	else if ((v1 instanceof Boolean) && (v2 instanceof Boolean)) return ((boolean)v1) == ((boolean)v2);
         	// TODO: Which other types may be compared for equality
         	else throw new RuntimeException("You cannot compare two objects of different types for equality.");
         }
@@ -217,9 +283,9 @@ public class Interpreter {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	
-        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((Integer)v1) != ((Integer)v2);
-        	else if ((v1 instanceof Double) && (v2 instanceof Double)) return ((Double)v1) != ((Double)v2);
-           	else if ((v1 instanceof Boolean) && (v2 instanceof Boolean)) return ((Boolean)v1) != ((Boolean)v2);
+        	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) != ((int)v2);
+        	else if ((v1 instanceof Double) && (v2 instanceof Double)) return ((double)v1) != ((double)v2);
+           	else if ((v1 instanceof Boolean) && (v2 instanceof Boolean)) return ((boolean)v1) != ((boolean)v2);
         	// TODO: Which other types may be compared for inequality
         	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
         }
@@ -227,9 +293,9 @@ public class Interpreter {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	if (v1 instanceof Integer) {
-        		if (((Integer)v1) == 1 ) {
+        		if (((int)v1) == 1 ) {
         			if (v2 instanceof Integer) {
-        				if (((Integer)v2) == 1 ) {
+        				if (((int)v2) == 1 ) {
         					return true;
         				} else {
         					return false;
@@ -245,7 +311,7 @@ public class Interpreter {
         		if (!((Boolean) v1)) return false;
         		if (v2 instanceof Boolean) return (Boolean) v2;
         		else {
-        			return (((Integer)v2) == 1 ? true : false);
+        			return (((int)v2) == 1 ? true : false);
         		}
         	}
         	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
@@ -254,12 +320,12 @@ public class Interpreter {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
         	Object v2 = e.exp_2.accept(new ExpEval(), env);
         	if (v1 instanceof Integer) {
-        		if (((Integer)v1) == 1 ) {
+        		if (((int)v1) == 1 ) {
         			return true;
         			
         		} else {
         			if (v2 instanceof Integer) {
-        				if (((Integer)v2) == 1 ) {
+        				if (((int)v2) == 1 ) {
         					return true;
         				} else {
         					return false;
@@ -273,7 +339,7 @@ public class Interpreter {
         		if (((Boolean) v1)) return true;
         		if (v2 instanceof Boolean) return (Boolean) v2;
         		else {
-        			return (((Integer)v2) == 1 ? true : false);
+        			return (((int)v2) == 1 ? true : false);
         		}
         	}
         	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
@@ -290,13 +356,13 @@ public class Interpreter {
         	case "printInt": {
         		assert(argEvaluation.size() == 1) : "printInt got too many arguments.";
         		Integer i = (Integer) argEvaluation.get(0);
-        		System.out.print(i);
+        		System.out.println(i);
         		return null;
         	}
         	case "printDouble": {
         		assert(argEvaluation.size() == 1) : "printDouble got too many arguments.";
         		Double d = (Double) argEvaluation.get(0);
-        		System.out.print(d);
+        		System.out.println(d);
         		return null;
         	}
         	
@@ -321,7 +387,12 @@ public class Interpreter {
         	FunctionInterpreter fi = new FunctionInterpreter();
         	fi.visit(func.cFunDecl, funcEnv);
         	// Return the returned value of the function
-        	Object returnValue = funcEnv.lookupVar("return");
+        	Object returnValue = null;
+        	try {
+        		returnValue = funcEnv.lookupVar("return");
+        	} catch (RuntimeException re) {
+        		// If the function has no return value, return "null".
+        	}
         	return returnValue;
         }
         	

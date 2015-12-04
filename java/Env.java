@@ -99,8 +99,9 @@ public class Env {
             HashMap<String, Object> context = listIterator.previous();
             if (context.containsKey(id)) {
             	context.put(id, varValue);
+            	return this;
             }
-            return this;
+            
         }
         throw new RuntimeException("Var "+ id +" not declared in any context.");
         
