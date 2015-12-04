@@ -2,6 +2,7 @@ import java.util.LinkedList;
 
 import CPP.Absyn.*;
 
+
 public class Interpreter {
 
     public void interpret(Program p) {
@@ -38,9 +39,7 @@ public class Interpreter {
         public Void visit(DFun df, Env env) {
             for(Stm stm : df.liststm_) {
                 stm.accept(new StmEval(), env);
-                if(stm instanceof SReturn) {
-                    break;
-                }
+                if (env.getFlow() == Env.Flow.RETURN) break;
             }
             return null;
         }
@@ -68,6 +67,7 @@ public class Interpreter {
         public Void visit(SReturn df, Env env) {
         	Object returnValue = df.exp_.accept(new ExpEval(), env);
         	env.declareVar("return", returnValue);
+        	env.setFlow(Env.Flow.RETURN);
             return null;
         }
 
@@ -82,9 +82,7 @@ public class Interpreter {
         	env.newBlock();
         	for(Stm stm : df.liststm_) {
                 stm.accept(new StmEval(), env);
-                if(stm instanceof SReturn) {
-                    break;
-                }
+                if (env.getFlow() == Env.Flow.RETURN) return null;
             }
         	env.exitBlock();
             return null;
@@ -290,61 +288,39 @@ public class Interpreter {
         	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
         }
         public Boolean visit(EAnd e, Env env) { 
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(new ExpEval(), env);
+        	if (v1 instanceof Boolean) {
+        		if (!((boolean) v1)) return false;
+        	}
         	if (v1 instanceof Integer) {
-        		if (((int)v1) == 1 ) {
-        			if (v2 instanceof Integer) {
-        				if (((int)v2) == 1 ) {
-        					return true;
-        				} else {
-        					return false;
-        				}
-        			} else {
-        				return (Boolean) v2;
-        			}
-        		} else {
+        		if (((int)v1) != 1 ) {
         			return false;
         		}
         	}
-        	if (v1 instanceof Boolean) {
-        		if (!((Boolean) v1)) return false;
-        		if (v2 instanceof Boolean) return (Boolean) v2;
-        		else {
-        			return (((int)v2) == 1 ? true : false);
-        		}
+        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+
+        	if (v2 instanceof Boolean) return (boolean) v2;
+        	else {
+        		return (((int)v2) == 1 ? true : false);
         	}
-        	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
+//        	else throw new RuntimeException("You cannot use \"AND\" for two objects of different types.");
         }
         public Boolean visit(EOr e, Env env) {
         	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
-        	if (v1 instanceof Integer) {
-        		if (((int)v1) == 1 ) {
-        			return true;
-        			
-        		} else {
-        			if (v2 instanceof Integer) {
-        				if (((int)v2) == 1 ) {
-        					return true;
-        				} else {
-        					return false;
-        				}
-        			} else {
-        				return (Boolean) v2;
-        			}
-        		}
-        	}
         	if (v1 instanceof Boolean) {
-        		if (((Boolean) v1)) return true;
-        		if (v2 instanceof Boolean) return (Boolean) v2;
-        		else {
-        			return (((int)v2) == 1 ? true : false);
-        		}
+        		if (((boolean) v1)) return true;
         	}
-        	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
+        	if (v1 instanceof Integer) {
+        		if (((int)v1) == 1 ) return true;
+        	}
+        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	
+        	if (v2 instanceof Boolean) return (boolean) v2;
+        	else {
+        		return (((int)v2) == 1 ? true : false);
+        	}
         }
-        
+        		
         private Object evaluateFunction(EApp exp, Env env) {
         	LinkedList<Object> argEvaluation = new LinkedList<Object>();
         	// Evaluate the arguments
@@ -386,7 +362,11 @@ public class Interpreter {
         	// Execute the stmts of the function
         	FunctionInterpreter fi = new FunctionInterpreter();
         	fi.visit(func.cFunDecl, funcEnv);
-        	// Return the returned value of the function
+        	// Change the Flow to NORMAL
+        	env.setFlow(Env.Flow.NORMAL);
+        	// If the function is void, return null.
+        	if (func.cFunDecl.type_ instanceof Type_void) return null;
+        	// Else return the returned value of the function
         	Object returnValue = null;
         	try {
         		returnValue = funcEnv.lookupVar("return");

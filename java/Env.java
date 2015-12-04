@@ -6,6 +6,7 @@ import CPP.PrettyPrinter;
 import CPP.Absyn.*;
 
 public class Env {
+	public enum Flow  {NORMAL, RETURN};
     // functions
     public HashMap<String, FunType> signature = new HashMap<String, FunType>();
     // current variables for TypeChecker
@@ -16,7 +17,10 @@ public class Env {
     // functions
     private HashMap<String, Function> declFunctions = new HashMap<String, Function>();
     
+    private Flow mFlowOfTheProgram = Flow.NORMAL;
+    
    
+
 	private final String cFunctionOfThisEnv; 
     
     private Env() {cFunctionOfThisEnv = "NoFunctionGivenForThisContext"; }
@@ -143,5 +147,14 @@ public class Env {
         varContexts.pollLast();
         return this;
     }
+    
+
+	public Flow getFlow() {
+		return mFlowOfTheProgram;
+	}
+
+	public void setFlow(Flow flowOfTheProgram) {
+		this.mFlowOfTheProgram = flowOfTheProgram;
+	}
 }
 
