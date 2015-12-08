@@ -82,14 +82,14 @@ public class TypeChecker {
         public Void visit(SReturn p, Env env) {
             Type retType = env.getTypeOfVar("return");
             //void
-            if(retType.equals(new Type_void())) {
+/*            if(retType.equals(new Type_void())) {
                 throw new TypeException("Did not expect return statement in void method.");
-            } else {
+            } else {*/
                 Type expType = p.exp_.accept(new ExpInferer(),env);
                 if (!retType.equals(expType)) {
                     throw new TypeException("Returned type doesn't match declared one.");
                 }
-            }
+//            }
             return null;
         }
 
