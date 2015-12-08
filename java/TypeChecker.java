@@ -7,9 +7,77 @@ import CPP.Absyn.*;
 
 public class TypeChecker {
 
-    private enum TypeCode {
-        INT, DOUBLE, BOOL, VOID
+    private static class FunType {
+        public LinkedList<Type> intyps;
+        public Type outtyp;
+
+        public FunType(LinkedList<Type> intyps, Type outtyp) {
+            this.intyps = intyps;
+            this.outtyp = outtyp;
+        };
     }
+
+    private static class Env {
+        // functions
+        public HashMap<String, FunType> signature = new HashMap<String, FunType>();
+        // current variables
+        public LinkedList<HashMap<String,Type>> contexts = new LinkedList<HashMap<String,Type>>();
+
+        private Env() { }
+
+        public static Env empty() {
+            Env env = new Env();
+            return env;
+        }
+
+        public FunType lookupFun(String id) {
+            if (signature.containsKey(id))
+                return signature.get(id);
+            else
+                throw new TypeException("Function "+ id +" not defined");
+        }
+
+        public Type lookupVar(String id) {
+            // search from current to earlier contexts
+            ListIterator<HashMap<String, Type>> listIterator = contexts.listIterator(contexts.size());
+
+            while(listIterator.hasPrevious()) {
+                HashMap<String, Type> context = listIterator.previous();
+                if (context.containsKey(id))
+                    return context.get(id);
+            }
+            throw new TypeException("Var "+ id +" not declared in any context.");
+        }
+
+        public Env updateVar(String id, Type typ) {
+            if (contexts.getLast().containsKey(id)) {
+                throw new TypeException("Var "+ id +" already declared");
+            } else {
+                contexts.getLast().put(id, typ);
+                return this;
+            }
+        }
+
+        public Env updateFun(String id, FunType funtyp) {
+            if (signature.containsKey(id)) {
+                throw new TypeException("Function "+ id +" already declared");
+            } else {
+                signature.put(id, funtyp);
+                return this;
+            }
+        }
+
+        public Env newBlock() {
+            contexts.add(new HashMap<String,Type>());
+            return this;
+        }
+
+        public Env exitBlock() {
+            contexts.pollLast();
+            return this;
+        }
+    }
+
 
     public void typecheck(Program p) {
         PDefs defs = (PDefs)p;
@@ -35,6 +103,12 @@ public class TypeChecker {
                 args.add(decl.type_);
             }
             env.updateFun(df.id_, new FunType(funArgs,df.type_));
+        }
+
+        // check for valid main method
+        FunType main = env.lookupFun("main");
+        if (!(main.outtyp instanceof Type_int) || !main.intyps.isEmpty()) {
+            throw new TypeException("Main method has incorrect format");
         }
 
         for(Def f: defs.listdef_) {
@@ -80,7 +154,7 @@ public class TypeChecker {
         }
 
         public Void visit(SReturn p, Env env) {
-            Type retType = env.getTypeOfVar("return");
+            Type retType = env.lookupVar("return");
             //void
 /*            if(retType.equals(new Type_void())) {
                 throw new TypeException("Did not expect return statement in void method.");
@@ -138,7 +212,7 @@ public class TypeChecker {
         public Type visit(EDouble e, Env env) { return new Type_double(); }
 
         // var, function
-        public Type visit(EId e, Env env) { return env.getTypeOfVar(e.id_); }
+        public Type visit(EId e, Env env) { return env.lookupVar(e.id_); }
         public Type visit(EApp e, Env env) { return env.lookupFun(e.id_).outtyp; }
 
         //++ -- (implicit variable via parser)
