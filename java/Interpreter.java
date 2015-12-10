@@ -1,5 +1,7 @@
 import java.util.LinkedList;
-
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import CPP.Absyn.*;
 
 
@@ -342,13 +344,27 @@ public class Interpreter {
         		return null;
         	}
         	
-        	case "readInt": {
-        		// System.in
-        		// TODO:
-        	}
+        	case "readInt":
         	case "readDouble": {
-        		// System.in
-        		// TODO:
+        		BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+        		String line = null;
+        		try {
+
+        				line = input.readLine();
+
+				} catch (IOException e1) {
+										System.out.println("There was a problem readin a line from stdin");
+					System.err.println(e1.getMessage());
+				}
+        		if (line != null) {
+        			if (exp.id_ == "readInt") {
+        				return Integer.parseInt(line);
+        			} else {
+        				return Double.parseDouble(line);
+        			}
+        		} else {
+				throw new RuntimeException("Could not read the number from standard-input, the string was \"null\"");
+        		}
         	}
         	}
         	Function func = env.lookupFunction(exp.id_);
