@@ -14,7 +14,7 @@ public class TypeChecker {
         public FunType(LinkedList<Type> intyps, Type outtyp) {
             this.intyps = intyps;
             this.outtyp = outtyp;
-        };
+        }
     }
 
     private static class Env {
@@ -85,14 +85,13 @@ public class TypeChecker {
         LinkedList<Type> args = new LinkedList<Type>();
 
         // predefined functions
-        env.updateFun("readInt", new FunType(args, new Type_int()));
+        env.updateFun("readInt", new FunType(new LinkedList<Type>(args), new Type_int()));
         args.add(new Type_int());
-        env.updateFun("printInt", new FunType(args, new Type_void()));
+        env.updateFun("printInt", new FunType(new LinkedList<Type>(args), new Type_void()));
         args.clear();
-        env.updateFun("readDouble", new FunType(args, new Type_double()));
+        env.updateFun("readDouble", new FunType(new LinkedList<Type>(args), new Type_double()));
         args.add(new Type_double());
-        env.updateFun("printDouble", new FunType(args, new Type_void()));
-        args.clear();
+        env.updateFun("printDouble", new FunType(new LinkedList<Type>(args), new Type_void()));
 
         for(Def f: defs.listdef_) {
             DFun df = (DFun)f;
@@ -100,7 +99,7 @@ public class TypeChecker {
 
             for(Arg arg: df.listarg_) {
                 ADecl decl = (ADecl)arg;
-                args.add(decl.type_);
+                funArgs.add(decl.type_);
             }
             env.updateFun(df.id_, new FunType(funArgs,df.type_));
         }
@@ -156,14 +155,10 @@ public class TypeChecker {
         public Void visit(SReturn p, Env env) {
             Type retType = env.lookupVar("return");
             //void
-/*            if(retType.equals(new Type_void())) {
-                throw new TypeException("Did not expect return statement in void method.");
-            } else {*/
                 Type expType = p.exp_.accept(new ExpInferer(),env);
                 if (!retType.equals(expType)) {
                     throw new TypeException("Returned type doesn't match declared one.");
                 }
-//            }
             return null;
         }
 
@@ -213,7 +208,27 @@ public class TypeChecker {
 
         // var, function
         public Type visit(EId e, Env env) { return env.lookupVar(e.id_); }
-        public Type visit(EApp e, Env env) { return env.lookupFun(e.id_).outtyp; }
+        //TODO parameter types
+        public Type visit(EApp e, Env env) {
+            FunType ftype = env.lookupFun(e.id_);
+            // check amount of arguments
+            if(ftype.intyps.size() != e.listexp_.size()) {
+                throw new TypeException("Arguments for function call of " + e.id_ +
+                    " has wrong amount of arguments " + ftype.intyps + " " + e.listexp_.size());
+            }
+
+            // check for each argument whether it's type is what it's supposed to be
+            ListIterator<Type> intyps = ftype.intyps.listIterator();
+            for(Exp exp:e.listexp_) {
+                Type type = exp.accept(new ExpInferer(), env);
+                if(!intyps.next().equals(type)) {
+                    throw new TypeException("Argument for function call to " + e.id_ +
+                        " has wrong type " + type + " at position " + intyps.previousIndex());
+                }
+            }
+
+            return env.lookupFun(e.id_).outtyp;
+        }
 
         //++ -- (implicit variable via parser)
         public Type visit(EPostIncr e, Env env) { return e.exp_.accept(this, env); }
