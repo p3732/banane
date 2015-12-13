@@ -16,6 +16,7 @@ public class lab2 {
             parser p = new parser(l);
             CPP.Absyn.Program parse_tree = p.pProgram();
             new TypeChecker().typecheck(parse_tree);
+            System.err.println("Types checked success");
             new Interpreter().interpret(parse_tree);
 
         } catch (TypeException e) {

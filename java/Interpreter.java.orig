@@ -1,11 +1,14 @@
 import java.util.HashMap;
 import java.util.LinkedList;
+<<<<<<< HEAD
 import java.util.ListIterator;
+
+import CPP.PrettyPrinter;
+=======
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-
-import CPP.PrettyPrinter;
+>>>>>>> 5d8bc17ea4dc787973b7ce32cf48a82cadeb5b3a
 import CPP.Absyn.*;
 
 public class Interpreter {
@@ -92,7 +95,13 @@ public class Interpreter {
         // Iterate over all function declarations
         for(Def f: defs.listdef_) {
             DFun df = (DFun)f;
-	    baseEnv.declareFunction(df.id_, df);
+            /*LinkedList<String> params = new LinkedList<String>();
+
+            for(Arg arg: df.listarg_) { // add params for func definition
+                ADecl decl = (ADecl)arg;
+                params.add(decl.id_);
+            }*/
+	    	baseEnv.declareFunction(df.id_, df);
         }
         Env.setAsBaseEnv(baseEnv);
 
@@ -116,7 +125,7 @@ public class Interpreter {
 
     private class StmEval implements Stm.Visitor<Object, Env> {
         public Object visit(SExp expr, Env env) {
-            expr.exp_.accept(new ExpEval(), env);
+        	expr.exp_.accept(new ExpEval(), env);
             return null;
         }
 
@@ -138,15 +147,15 @@ public class Interpreter {
         }
 
         public Object visit(SWhile df, Env env) {
-       	    Object ret = null;
-       	    env.newBlock();
-       	    while ((boolean) df.exp_.accept(new ExpEval(), env)) {
-       	        ret = df.stm_.accept(new StmEval(), env);
-       	        if (ret!= null)
-       	            break;
-       	    }
-       	    env.exitBlock();
-       	    return ret;
+        	Object ret = null;
+        	env.newBlock();
+        	while ((boolean) df.exp_.accept(new ExpEval(), env)) {
+        		ret = df.stm_.accept(new StmEval(), env);
+        		if (ret!= null)
+        		    break;
+        	}
+        	env.exitBlock();
+            return ret;
         }
 
         public Object visit(SBlock df, Env env) {
@@ -403,7 +412,9 @@ public class Interpreter {
         		BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
         		String line = null;
         		try {
+
         				line = input.readLine();
+
 				} catch (IOException e1) {
 										System.out.println("There was a problem readin a line from stdin");
 					System.err.println(e1.getMessage());
@@ -417,6 +428,7 @@ public class Interpreter {
         		} else {
 				throw new RuntimeException("Could not read the number from standard-input, the string was \"null\"");
         		}
+        	}
         	}
 
         	//// handle program-specific functions
