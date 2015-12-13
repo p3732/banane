@@ -1,101 +1,180 @@
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.ListIterator;
 
+import CPP.PrettyPrinter;
 import CPP.Absyn.*;
-
 
 public class Interpreter {
 
+    private static class Env {
+        // functions
+        public HashMap<String, DFun> signatures = new HashMap<String, DFun>();
+        // current variables for Interpreter
+        private LinkedList<HashMap<String,Object>> contexts = new LinkedList<HashMap<String,Object>>();
+
+        // base environment with all declared functions. used as singleton.
+        private static Env baseEnv = null;
+
+        private Env() { }
+
+        private Env(Env env) {
+            this.signatures = new HashMap(env.signatures);
+            this.contexts = new LinkedList(env.contexts);
+        }
+
+        public static Env empty() {
+            Env env;
+            if (baseEnv==null) {
+                env = new Env();
+                env.newBlock();
+            } else {
+                env = new Env(baseEnv);
+            }
+            return env;
+        }
+
+        public static void setAsBaseEnv(Env env) {
+            baseEnv = env;
+        }
+
+        public DFun lookupFunction(String id) {
+            return signatures.get(id);
+        }
+
+        public Object lookupVar(String id) {
+        	// search from current to earlier contexts
+            ListIterator<HashMap<String, Object>> listIterator = contexts.listIterator(contexts.size());
+
+            while(listIterator.hasPrevious()) {
+                HashMap<String, Object> context = listIterator.previous();
+                if (context.containsKey(id))
+                    return context.get(id);
+            }
+            return null;
+        }
+
+        public void updateVar(String id, Object varValue) {
+        	// search from current to earlier contexts
+            ListIterator<HashMap<String, Object>> listIterator = contexts.listIterator(contexts.size());
+
+            while(listIterator.hasPrevious()) {
+                HashMap<String, Object> context = listIterator.previous();
+                if (context.containsKey(id))
+                    context.put(id, varValue);
+            }
+        }
+
+        public void declareVar(String id, Object varValue) {
+        	contexts.getLast().put(id, varValue);
+        }
+
+        public void declareFunction(String id, DFun f) {
+           	signatures.put(id, f);
+        }
+
+        public void newBlock() {
+            contexts.add(new HashMap<String,Object>());
+        }
+
+        public void exitBlock() {
+            contexts.pollLast();
+        }
+    }
+
     public void interpret(Program p) {
-//	System.out.println("Interpreting started....");
     	PDefs defs = (PDefs)p;
-        Env env = Env.empty();
+        Env baseEnv = Env.empty();
 
         // Iterate over all function declarations
         for(Def f: defs.listdef_) {
             DFun df = (DFun)f;
-//            System.out.println(df.id_ + " seen");
-            LinkedList<String> params = new LinkedList<String>();
+            /*LinkedList<String> params = new LinkedList<String>();
 
-            for(Arg arg: df.listarg_) {
+            for(Arg arg: df.listarg_) { // add params for func definition
                 ADecl decl = (ADecl)arg;
                 params.add(decl.id_);
-            }
-	    	Function func = new Function(params, df.liststm_, df);
-            env.updateFunction(df.id_, func);
+            }*/
+	    	baseEnv.declareFunction(df.id_, df);
         }
-//        System.out.println("Start interpreting main()");
+        Env.setAsBaseEnv(baseEnv);
+
         // interpret function main()
-        interpretMain(env);
-    }
-    
-    private void interpretMain(Env env) {
-    	FunctionInterpreter fi = new FunctionInterpreter();
-    	Env mainEnv = env.newFunction("main");
-    	Function f = mainEnv.lookupFunction("main");
-    	fi.visit(f.cFunDecl, mainEnv);
+        Env env = Env.empty();
+        DFun f = env.lookupFunction("main");
+        f.accept(new FunctionInterpreter(), env);
     }
 
-    private class FunctionInterpreter implements Def.Visitor<Void, Env> {
-        public Void visit(DFun df, Env env) {
+    private class FunctionInterpreter implements Def.Visitor<Object, Env> {
+        public Object visit(DFun df, Env env) {
+            Object ret = null;
             for(Stm stm : df.liststm_) {
-                stm.accept(new StmEval(), env);
-                if (env.getFlow() == Env.Flow.RETURN) break;
+                ret = stm.accept(new StmEval(), env);
+                if (ret != null)
+                    break;
             }
-            return null;
+            return ret;
         }
     }
 
-    private class StmEval implements Stm.Visitor<Void, Env> {
-        public Void visit(SExp expr, Env env) {
+    private class StmEval implements Stm.Visitor<Object, Env> {
+        public Object visit(SExp expr, Env env) {
         	expr.exp_.accept(new ExpEval(), env);
             return null;
         }
 
-        public Void visit(SDecls df, Env env) {
-        	for (String id : df.listid_) {
-        		env.declareVar(id, null);
-        	}
+        public Object visit(SDecls df, Env env) {
+            for(String id:df.listid_) {
+                env.declareVar(id,null);
+            }
             return null;
         }
 
-        public Void visit(SInit df, Env env) {
+        public Object visit(SInit df, Env env) {
         	Object varValue = df.exp_.accept(new ExpEval(), env);
         	env.declareVar(df.id_, varValue);
             return null;
         }
 
-        public Void visit(SReturn df, Env env) {
-        	Object returnValue = df.exp_.accept(new ExpEval(), env);
-        	env.declareVar("return", returnValue);
-        	env.setFlow(Env.Flow.RETURN);
-            return null;
+        public Object visit(SReturn df, Env env) {
+        	return df.exp_.accept(new ExpEval(), env);
         }
 
-        public Void visit(SWhile df, Env env) {
+        public Object visit(SWhile df, Env env) {
+        	Object ret = null;
+        	env.newBlock();
         	while ((boolean) df.exp_.accept(new ExpEval(), env)) {
-        		df.stm_.accept(new StmEval(), env);
+        		ret = df.stm_.accept(new StmEval(), env);
+        		if (ret!= null)
+        		    break;
         	}
-            return null;
+        	env.exitBlock();
+            return ret;
         }
 
-        public Void visit(SBlock df, Env env) {
+        public Object visit(SBlock df, Env env) {
+        	Object ret = null;
         	env.newBlock();
         	for(Stm stm : df.liststm_) {
-                stm.accept(new StmEval(), env);
-                if (env.getFlow() == Env.Flow.RETURN) return null;
+                ret = stm.accept(new StmEval(), env);
+                if (ret!= null)
+                    break;
             }
         	env.exitBlock();
-            return null;
+            return ret;
         }
 
 
-        public Void visit(SIfElse df, Env env) {
+        public Object visit(SIfElse df, Env env) {
+        	Object ret;
+        	env.newBlock();
         	if ((boolean) df.exp_.accept(new ExpEval(), env)) {
-        		df.stm_1.accept(new StmEval(), env);
+        		ret = df.stm_1.accept(new StmEval(), env);
         	} else {
-        		df.stm_2.accept(new StmEval(), env);
+        		ret = df.stm_2.accept(new StmEval(), env);
         	}
-            return null;
+        	env.exitBlock();
+            return ret;
         }
     }
 
@@ -107,49 +186,38 @@ public class Interpreter {
         public Double visit(EDouble e, Env env) { return e.double_; }
 
         // var, function
-        public Object visit(EId e, Env env) { return env.lookupVar(e.id_); }
-        
-        public Object visit(EApp e, Env env) { 
-        	return evaluateFunction(e, env);
+        public Object visit(EId e, Env env) {
+            Object v = env.lookupVar(e.id_);
+            if (v==null) {
+                throw new RuntimeException(e.id_ + " was used uninitialized!");
+            }
+            return v;
         }
+        public Object visit(EApp e, Env env) { return evaluateFunction(e, env); }
 
-        //++ -- (implicit variable via parser)
-        public Object visit(EPostIncr e, Env env) { 
-        	if (!(e.exp_ instanceof EId)) {
-        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
-        	}
+        //++ --
+        public Object visit(EPostIncr e, Env env) {
         	String var = ((EId) e.exp_).id_;
         	Object oldValue = env.lookupVar(var);
         	if (oldValue instanceof Integer) {
         		env.updateVar(var, ((Integer) oldValue).intValue() + 1);
         	} else if (oldValue instanceof Double) {
         		env.updateVar(var, ((Double) oldValue).doubleValue() + 1.0);
-        	} else {
-        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
         	}
-        	
-        	return oldValue; 
+        	return oldValue;
         }
         public Object visit(EPostDecr e, Env env) {
-        	if (!(e.exp_ instanceof EId)) {
-        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
-        	}
         	String var = ((EId) e.exp_).id_;
         	Object oldValue = env.lookupVar(var);
         	if (oldValue instanceof Integer) {
         		env.updateVar(var, ((Integer) oldValue).intValue() - 1);
         	} else if (oldValue instanceof Double) {
         		env.updateVar(var, ((Double) oldValue).doubleValue() - 1.0);
-        	} else {
-        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
         	}
-        	
-        	return oldValue; 
+
+        	return oldValue;
         }
-        public Object visit(EPreIncr e, Env env) { 
-        	if (!(e.exp_ instanceof EId)) {
-        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
-        	}
+        public Object visit(EPreIncr e, Env env) {
         	String var = ((EId) e.exp_).id_;
         	Object oldValue = env.lookupVar(var);
         	if (oldValue instanceof Integer) {
@@ -160,14 +228,9 @@ public class Interpreter {
         		Double newValue = ((Double) oldValue).doubleValue() + 1.0;
         		env.updateVar(var, newValue);
         		return newValue;
-        	} else {
-        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
-        	}
+        	} else return null;
         }
-        public Object visit(EPreDecr e, Env env) { 
-        	if (!(e.exp_ instanceof EId)) {
-        		throw new RuntimeException("LHS of post-increment is not an EId, it is " + e.exp_.getClass());
-        	}
+        public Object visit(EPreDecr e, Env env) {
         	String var = ((EId) e.exp_).id_;
         	Object oldValue = env.lookupVar(var);
         	if (oldValue instanceof Integer) {
@@ -178,43 +241,41 @@ public class Interpreter {
         		Double newValue = ((Double) oldValue).doubleValue() - 1.0;
         		env.updateVar(var, newValue);
         		return newValue;
-        	} else {
-        		throw new RuntimeException("oldValue is neither Integer nor Double, it's " + oldValue.getClass());
-        	}
+        	} else return null;
         }
 
-        // * / + - assignment(implicit variable via parser)
-        public Object visit(ETimes e, Env env) { 
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
-        	
+        // * / + - assignment
+        public Object visit(ETimes e, Env env) {
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
+
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) * ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) * ((double)v2);
         	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) * ((int)v2);
         	return ((double)v1) * ((double)v2);
         }
         public Object visit(EDiv e, Env env) { 
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
-        	
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
+
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) / ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) / ((double)v2);
         	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) / ((int)v2);
         	return ((double)v1) / ((double)v2);
         }
         public Object visit(EPlus e, Env env) { 
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
-        	
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
+
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) + ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) + ((double)v2);
         	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) + ((int)v2);
         	return ((double)v1) + ((double)v2);
         }
         public Object visit(EMinus e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
-        	
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
+
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) - ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) - ((double)v2);
         	else if ((v1 instanceof Double) && (v2 instanceof Integer)) return ((double)v1) - ((int)v2);
@@ -225,15 +286,15 @@ public class Interpreter {
         		throw new RuntimeException("Left-hand side of the assignment is not a variable.");
         	}
         	String id = ((EId) e.exp_1).id_;
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v2 = e.exp_2.accept(this, env);
         	env.updateVar(id, v2);
-        	return v2; 
+        	return v2;
         }
 
         // < > >= ... && ||
-        public Boolean visit(ELt e, Env env) { 
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        public Boolean visit(ELt e, Env env) {
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
         	
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) < ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) < ((double)v2);
@@ -241,8 +302,8 @@ public class Interpreter {
         	return ((double)v1) < ((double)v2);
         }
         public Boolean visit(EGt e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
         	
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) > ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) > ((double)v2);
@@ -250,8 +311,8 @@ public class Interpreter {
         	return ((double)v1) > ((double)v2);
         }
         public Boolean visit(ELtEq e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
         	
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) <= ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) <= ((double)v2);
@@ -259,8 +320,8 @@ public class Interpreter {
         	return ((double)v1) <= ((double)v2);
         }
         public Boolean visit(EGtEq e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
         	
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) >= ((int)v2);
         	else if ((v1 instanceof Integer) && (v2 instanceof Double)) return ((int)v1) >= ((double)v2);
@@ -268,8 +329,8 @@ public class Interpreter {
         	return ((double)v1) >= ((double)v2);
         }
         public Boolean visit(EEq e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
         	
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) { return ((int)v1) == ((int)v2); }
         	else if ((v1 instanceof Double) && (v2 instanceof Double)) return ((double)v1) == ((double)v2);
@@ -278,8 +339,8 @@ public class Interpreter {
         	else throw new RuntimeException("You cannot compare two objects of different types for equality.");
         }
         public Boolean visit(ENEq e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(this, env);
+        	Object v2 = e.exp_2.accept(this, env);
         	
         	if ((v1 instanceof Integer) && (v2 instanceof Integer)) return ((int)v1) != ((int)v2);
         	else if ((v1 instanceof Double) && (v2 instanceof Double)) return ((double)v1) != ((double)v2);
@@ -288,7 +349,7 @@ public class Interpreter {
         	else throw new RuntimeException("You cannot compare two objects of different types for inequality.");
         }
         public Boolean visit(EAnd e, Env env) { 
-        	Object v1 = e.exp_1.accept(new ExpEval(), env);
+        	Object v1 = e.exp_1.accept(this, env);
         	if (v1 instanceof Boolean) {
         		if (!((boolean) v1)) return false;
         	}
@@ -297,47 +358,45 @@ public class Interpreter {
         			return false;
         		}
         	}
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
+        	Object v2 = e.exp_2.accept(this, env);
 
         	if (v2 instanceof Boolean) return (boolean) v2;
         	else {
         		return (((int)v2) == 1 ? true : false);
         	}
-//        	else throw new RuntimeException("You cannot use \"AND\" for two objects of different types.");
         }
         public Boolean visit(EOr e, Env env) {
-        	Object v1 = e.exp_1.accept(new ExpEval(), env); 
+        	Object v1 = e.exp_1.accept(this, env);
         	if (v1 instanceof Boolean) {
         		if (((boolean) v1)) return true;
         	}
         	if (v1 instanceof Integer) {
         		if (((int)v1) == 1 ) return true;
         	}
-        	Object v2 = e.exp_2.accept(new ExpEval(), env);
-        	
+        	Object v2 = e.exp_2.accept(this, env);
+
         	if (v2 instanceof Boolean) return (boolean) v2;
         	else {
         		return (((int)v2) == 1 ? true : false);
         	}
         }
         		
-        private Object evaluateFunction(EApp exp, Env env) {
-        	LinkedList<Object> argEvaluation = new LinkedList<Object>();
+        private Object evaluateFunction(EApp e, Env env) {
         	// Evaluate the arguments
-        	for (Exp e : exp.listexp_) {
-        		argEvaluation.addLast(e.accept(new ExpEval(), env));
+        	LinkedList<Object> argVals = new LinkedList<Object>();
+        	for (Exp exp: e.listexp_) {
+        		argVals.add(exp.accept(this, env));
         	}
-        	
-        	switch (exp.id_) {
+
+        	//// built-in methods
+        	switch (e.id_) {
         	case "printInt": {
-        		assert(argEvaluation.size() == 1) : "printInt got too many arguments.";
-        		Integer i = (Integer) argEvaluation.get(0);
+        		Integer i = (Integer) argVals.getFirst();
         		System.out.println(i);
         		return null;
         	}
         	case "printDouble": {
-        		assert(argEvaluation.size() == 1) : "printDouble got too many arguments.";
-        		Double d = (Double) argEvaluation.get(0);
+        		Double d = (Double) argVals.getFirst();
         		System.out.println(d);
         		return null;
         	}
@@ -351,31 +410,21 @@ public class Interpreter {
         		// TODO:
         	}
         	}
-        	Function func = env.lookupFunction(exp.id_);
-        	// Put new environment
-        	// Create mapping from parameter to its appropriate value (in the new environment)
-        	Env funcEnv = env.newFunction(func.cFunDecl.id_);
-        	assert(func.cParameters.size() == argEvaluation.size());
-        	for (int i = 0; i < func.cParameters.size(); i++) {
-        		funcEnv.declareVar(func.cParameters.get(i), argEvaluation.get(i));
+
+        	//// handle program-specific functions
+        	DFun df = env.lookupFunction(e.id_);
+
+        	// create new env with args
+        	Env newEnv = Env.empty();
+            ListIterator<Arg> argIds = df.listarg_.listIterator();
+        	for(Object argVal:argVals) {
+                ADecl ad = (ADecl)argIds.next();
+        	    newEnv.declareVar(ad.id_,argVal);
         	}
-        	// Execute the stmts of the function
-        	FunctionInterpreter fi = new FunctionInterpreter();
-        	fi.visit(func.cFunDecl, funcEnv);
-        	// Change the Flow to NORMAL
-        	env.setFlow(Env.Flow.NORMAL);
-        	// If the function is void, return null.
-        	if (func.cFunDecl.type_ instanceof Type_void) return null;
-        	// Else return the returned value of the function
-        	Object returnValue = null;
-        	try {
-        		returnValue = funcEnv.lookupVar("return");
-        	} catch (RuntimeException re) {
-        		// If the function has no return value, return "null".
-        	}
-        	return returnValue;
+
+        	return df.accept(new FunctionInterpreter(), newEnv);
         }
-        	
+
     }
 }
 
