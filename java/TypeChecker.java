@@ -148,6 +148,10 @@ public class TypeChecker {
         }
 
         public Void visit(SInit p, Env env) {
+            Type type = p.exp_.accept(new ExpInferer(), env);
+            if(!p.type_.equals(type)) {
+                throw new TypeException("can't init "+p.id_+" of type "+p.type_+" with given type "+type);
+            }
             env.updateVar(p.id_, p.type_);
             return null;
         }
@@ -200,11 +204,16 @@ public class TypeChecker {
     }
 
     private class ExpInferer implements Exp.Visitor<Type, Env> {
+        Type_void v = new Type_void();
+        Type_int i = new Type_int();
+        Type_double d = new Type_double();
+        Type_bool b = new Type_bool();
+
         // basic
-        public Type visit(ETrue e, Env env) { return new Type_bool(); }
-        public Type visit(EFalse e, Env env) { return new Type_bool(); }
-        public Type visit(EInt e, Env env) { return new Type_int(); }
-        public Type visit(EDouble e, Env env) { return new Type_double(); }
+        public Type visit(ETrue e, Env env) { return b; }
+        public Type visit(EFalse e, Env env) { return b; }
+        public Type visit(EInt e, Env env) { return i; }
+        public Type visit(EDouble e, Env env) { return d; }
 
         // var, function
         public Type visit(EId e, Env env) { return env.lookupVar(e.id_); }
@@ -220,7 +229,7 @@ public class TypeChecker {
             // check for each argument whether it's type is what it's supposed to be
             ListIterator<Type> intyps = ftype.intyps.listIterator();
             for(Exp exp:e.listexp_) {
-                Type type = exp.accept(new ExpInferer(), env);
+                Type type = exp.accept(this, env);
                 if(!intyps.next().equals(type)) {
                     throw new TypeException("Argument for function call to " + e.id_ +
                         " has wrong type " + type + " at position " + intyps.previousIndex());
@@ -231,10 +240,10 @@ public class TypeChecker {
         }
 
         //++ -- (implicit variable via parser)
-        public Type visit(EPostIncr e, Env env) { return e.exp_.accept(this, env); }
-        public Type visit(EPostDecr e, Env env) { return e.exp_.accept(this, env); }
-        public Type visit(EPreIncr e, Env env) { return e.exp_.accept(this, env); }
-        public Type visit(EPreDecr e, Env env) { return e.exp_.accept(this, env); }
+        public Type visit(EPostIncr e, Env env) { return numberType(e.exp_, env, "post++"); }
+        public Type visit(EPostDecr e, Env env) { return numberType(e.exp_, env, "post--"); }
+        public Type visit(EPreIncr e, Env env) { return numberType(e.exp_, env, "++pre"); }
+        public Type visit(EPreDecr e, Env env) { return numberType(e.exp_, env, "--pre"); }
 
         // * / + - assignment(implicit variable via parser)
         public Type visit(ETimes e, Env env) { return intDoubleType(e.exp_1, e.exp_2, env, "*"); }
@@ -253,6 +262,15 @@ public class TypeChecker {
         public Type visit(EAnd e, Env env) { return boolType(e.exp_1, e.exp_2, env, "&&"); }
         public Type visit(EOr e, Env env) { return boolType(e.exp_1, e.exp_2, env, "||"); }
 
+        private Type numberType(Exp e, Env env, String symbol) {
+            Type type = e.accept(this, env);
+            if(type.equals(d) || type.equals(i)) {
+                return type;
+            } else {
+                throw new TypeException("Couldn't apply " + symbol + " to variable not of type double or int.");
+            }
+        }
+
         private Type sameType(Exp e1, Exp e2, Env env, String symbol) {
             Type type1 = e1.accept(this, env);
             Type type2 = e2.accept(this, env);
@@ -265,7 +283,7 @@ public class TypeChecker {
 
         private Type intDoubleType(Exp e1, Exp e2, Env env, String symbol) {
             Type type = sameType(e1, e2, env, symbol);
-            if(!type.equals(new Type_int()) && !type.equals(new Type_double())) {
+            if(!type.equals(i) && !type.equals(d)) {
                 throw new TypeException(symbol + " not applicable for " + type);
             }
             return type;
@@ -273,12 +291,11 @@ public class TypeChecker {
 
         private Type boolType(Exp e1, Exp e2, Env env, String symbol) {
             Type type = sameType(e1, e2, env, symbol);
-            if(!type.equals(new Type_bool()) && !type.equals(new Type_int())
-                && !type.equals(new Type_double())) {
+            if(!type.equals(b) && !type.equals(i) && !type.equals(d)) {
                 throw new TypeException("Comparison " + symbol +
                 " not possible, given arguments are not comparable.");
             }
-            return new Type_bool();
+            return b;
         }
     }
 }
