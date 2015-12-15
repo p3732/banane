@@ -10,6 +10,8 @@ import CPP.Absyn.*;
 
 public class Interpreter {
 
+    private BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+
     private static class Env {
         // functions
         public HashMap<String, DFun> signatures = new HashMap<String, DFun>();
@@ -23,17 +25,16 @@ public class Interpreter {
 
         private Env(Env env) {
             this.signatures = new HashMap(env.signatures);
-            this.contexts = new LinkedList(env.contexts);
+            this.contexts = new LinkedList();
         }
 
         public static Env empty() {
             Env env;
-            if (baseEnv==null) {
+            if (baseEnv==null)
                 env = new Env();
-                env.newBlock();
-            } else {
+            else
                 env = new Env(baseEnv);
-            }
+            env.newBlock();
             return env;
         }
 
@@ -63,8 +64,10 @@ public class Interpreter {
 
             while(listIterator.hasPrevious()) {
                 HashMap<String, Object> context = listIterator.previous();
-                if (context.containsKey(id))
+                if (context.containsKey(id)) {
                     context.put(id, varValue);
+                    break;
+                }
             }
         }
 
@@ -279,9 +282,6 @@ public class Interpreter {
         	return ((double)v1) - ((double)v2);
         }
         public Object visit(EAss e, Env env) {
-        	if (!(e.exp_1 instanceof EId)) {
-        		throw new RuntimeException("Left-hand side of the assignment is not a variable.");
-        	}
         	String id = ((EId) e.exp_1).id_;
         	Object v2 = e.exp_2.accept(this, env);
         	env.updateVar(id, v2);
@@ -387,38 +387,38 @@ public class Interpreter {
 
         	//// built-in methods
         	switch (e.id_) {
-        	case "printInt": {
-        		Integer i = (Integer) argVals.getFirst();
-        		System.out.println(i);
-        		return null;
-        	}
-        	case "printDouble": {
-        		Double d = (Double) argVals.getFirst();
-        		System.out.println(d);
-        		return null;
-        	}
-        	
-        	case "readInt":
-        	case "readDouble": {
-        		BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
-        		String line = null;
-        		try {
-        				line = input.readLine();
-				} catch (IOException e1) {
-										System.out.println("There was a problem readin a line from stdin");
-					System.err.println(e1.getMessage());
-				}
-        		if (line != null) {
-        			if (exp.id_ == "readInt") {
-        				return Integer.parseInt(line);
-        			} else {
-        				return Double.parseDouble(line);
-        			}
-        		} else {
-				throw new RuntimeException("Could not read the number from standard-input, the string was \"null\"");
-        		}
-        	}
+            	case "printInt": {
+            		Integer i = (Integer) argVals.getFirst();
+            		System.out.println(i);
+            		return null;
+            	}
+            	case "printDouble": {
+            		Double d = (Double) argVals.getFirst();
+            		System.out.println(d);
+            		return null;
+            	}
 
+            	case "readInt":
+            	case "readDouble": {
+            		String line = null;
+            		try {
+            				line = input.readLine();
+				    } catch (IOException e1) {
+					    System.err.println("There was a problem readin a line from stdin");
+					    System.err.println(e1.getMessage());
+					    throw new RuntimeException("Input Error.");
+				    }
+            		if (line != null) {
+            			if (e.id_ == "readInt") {
+            				return Integer.parseInt(line);
+            			} else {
+            				return Double.parseDouble(line);
+            			}
+            		} else {
+				        throw new RuntimeException("Could not read the number from standard-input, the string was \"null\"");
+            		}
+            	}
+            }
         	//// handle program-specific functions
         	DFun df = env.lookupFunction(e.id_);
 
@@ -432,7 +432,6 @@ public class Interpreter {
 
         	return df.accept(new FunctionInterpreter(), newEnv);
         }
-
     }
 }
 
